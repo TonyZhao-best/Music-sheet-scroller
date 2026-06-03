@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RollScore · BPM Music Scroller</title>
+<meta name="theme-color" content="#15171c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RollScore">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="lib/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#15171c;--bg2:#1a1d23;--panel:#1f232a;--panel2:#272c34;--line:#343b45;
+    --ink:#e9ecf1;--muted:#8a929d;--amber:#4f8ff0;--amber-dim:#6c7682;--teal:#4f8ff0;--red:#e06a5a;
+    --grape:#4f8ff0;
+    --shadow:0 16px 44px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(1100px 600px at 82% -15%, rgba(79,143,240,.07), transparent 62%),var(--bg);
+    color:var(--ink);font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased;
+  }
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+  header{display:flex;align-items:center;gap:18px;padding:14px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--bg2),rgba(29,24,16,.6));flex-shrink:0;}
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand h1{font-family:'Fraunces',Georgia,'Times New Roman',serif;font-weight:900;font-size:26px;letter-spacing:-.5px;color:var(--ink)}
+  .brand h1 .dot{color:var(--amber)}
+  .brand .tag{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+  .spacer{flex:1}
+  button,label.filebtn{font-family:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:12.5px;font-weight:500;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);padding:9px 14px;border-radius:9px;cursor:pointer;
+    letter-spacing:.3px;transition:.18s;display:inline-flex;align-items:center;gap:8px;}
+  button:hover,label.filebtn:hover{border-color:var(--amber-dim);color:var(--amber);transform:translateY(-1px)}
+  button:active{transform:translateY(0)}
+  button:disabled{opacity:.4;cursor:not-allowed;transform:none}
+  .filebtn input{display:none}
+  main{display:flex;flex:1;min-height:0}
+  aside{width:322px;flex-shrink:0;padding:20px;overflow-y:auto;border-right:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(36,30,21,.7),rgba(21,17,11,.7));}
+  aside::-webkit-scrollbar{width:8px}aside::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card h2{font-size:10.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--amber-dim);
+    margin-bottom:14px;display:flex;align-items:center;gap:8px}
+  .card h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--amber)}
+  .field{margin-bottom:14px}.field:last-child{margin-bottom:0}
+  .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px}
+  .field .row{display:flex;align-items:center;gap:10px}
+  input[type=number]{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    font-family:"JetBrains Mono";font-size:15px;font-weight:500;padding:9px 11px;border-radius:8px;outline:none;transition:.15s}
+  input[type=number]:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(79,143,240,.12)}
+  .bpm-wrap{display:flex;align-items:center;gap:12px}
+  .bpm-wrap input{font-size:34px;font-weight:700;text-align:center;font-family:'Fraunces',Georgia,serif;padding:6px;letter-spacing:1px}
+  .stepper{display:flex;flex-direction:column;gap:5px}.stepper button{padding:3px 9px;font-size:13px;line-height:1}
+  .seg{display:flex;gap:6px}.seg button{flex:1;justify-content:center;padding:8px 0;font-size:12px}
+  .seg button.on{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:700}
+  input[type=range]{width:100%;accent-color:var(--amber);height:4px}
+  .toggle{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-top:1px solid var(--line)}
+  .toggle:first-of-type{border-top:none}.toggle span{font-size:12.5px}
+  .sw{width:42px;height:23px;border-radius:20px;background:var(--bg);border:1px solid var(--line);
+    position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--muted);transition:.2s}
+  .sw.on{background:rgba(79,143,240,.25);border-color:var(--teal)}.sw.on::after{left:21px;background:var(--teal)}
+  .readout{background:var(--bg);border:1px dashed var(--line);border-radius:11px;padding:14px}
+  .readout .big{font-family:'Fraunces',Georgia,serif;font-size:30px;font-weight:900;color:var(--amber);line-height:1}
+  .readout .big small{font-size:13px;color:var(--muted);font-family:"JetBrains Mono";font-weight:400;margin-left:5px}
+  .readout .sub{font-size:11px;color:var(--muted);margin-top:9px;line-height:1.7}
+  .readout .sub b{color:var(--teal);font-weight:500}
+  .stage{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative}
+  .transport{display:flex;align-items:center;gap:14px;padding:12px 18px;border-bottom:1px solid var(--line);
+    background:rgba(21,17,11,.6);flex-shrink:0}
+  .play{width:52px;height:52px;border-radius:50%;background:var(--amber);border:none;color:#fff;display:flex;
+    align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;box-shadow:0 6px 20px rgba(79,143,240,.35);transition:.18s}
+  .play:hover{transform:scale(1.06)}.play:disabled{background:var(--panel2);color:var(--muted);box-shadow:none}
+  .play svg{width:22px;height:22px}
+  .status{display:flex;align-items:center;gap:7px;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+  .status .led{width:11px;height:11px;border-radius:50%;background:var(--red);box-shadow:0 0 9px var(--red);transition:.2s}
+  .status.live{color:#3ec46d}
+  .status.live .led{background:#3ec46d;box-shadow:0 0 11px #3ec46d}
+  .beats{display:flex;gap:8px}
+  .beat{width:13px;height:13px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);transition:.08s}
+  .beat.lit{background:var(--teal);box-shadow:0 0 12px var(--teal);transform:scale(1.15)}
+  .beat.down.lit{background:var(--amber);box-shadow:0 0 14px var(--amber)}
+  .lineind{display:flex;align-items:baseline;gap:6px;font-family:'Fraunces',Georgia,serif;font-weight:900;font-size:22px;color:var(--ink)}
+  .lineind #lineNo{color:var(--amber)}.lineind .sep,.lineind #lineTot{color:var(--muted);font-size:16px}
+  .lineind em{font-style:normal;font-family:"JetBrains Mono";font-size:10.5px;color:var(--muted);margin-left:8px;letter-spacing:.5px}
+  .tstat{font-size:11.5px;color:var(--muted);letter-spacing:.5px}.tstat b{color:var(--ink);font-weight:500}
+  .viewport{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;position:relative;scroll-behavior:auto;
+    padding:0 0 30vh 0;background:#0d0a06}
+  .viewport::-webkit-scrollbar{width:10px}.viewport::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
+  #pages{position:relative;display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 10px}
+  #pages canvas{border-radius:6px;box-shadow:var(--shadow);background:#fff;display:block;position:relative;z-index:1;cursor:pointer}
+  @keyframes lineflash{0%{background:rgba(79,143,240,.45)}100%{background:rgba(79,143,240,.13)}}
+  #hl.flash{animation:lineflash .5s ease-out}
+  /* current-line indicator */
+  #hl{position:absolute;left:0;right:0;z-index:4;pointer-events:none;
+    border-radius:6px;background:rgba(79,143,240,.13);
+    box-shadow:inset 0 0 0 2px rgba(79,143,240,.55), 0 0 22px rgba(79,143,240,.18);
+    transition:top .18s cubic-bezier(.4,0,.2,1), height .18s;display:none}
+  #hl::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--amber);border-radius:6px 0 0 6px;
+    box-shadow:0 0 14px var(--amber)}
+  .guide{position:absolute;left:0;right:0;height:0;border-top:1px dashed rgba(79,143,240,.55);pointer-events:none;z-index:5;opacity:0;transition:opacity .3s}
+  .guide.show{opacity:.7}
+  .empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    color:var(--muted);text-align:center;gap:18px;padding:30px}
+  .empty .ic{font-size:54px;opacity:.5}.empty h3{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:22px;color:var(--ink)}
+  .empty p{font-size:12.5px;max-width:340px;line-height:1.7}
+  .progress{position:absolute;top:0;left:0;height:3px;background:var(--amber);width:0;z-index:8;transition:width .12s linear}
+  .hint{font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.6;letter-spacing:.3px}
+  kbd{background:var(--panel2);border:1px solid var(--line);border-radius:4px;padding:1px 5px;font-size:10px;color:var(--amber)}
+  @media(max-width:780px){aside{position:absolute;z-index:20;height:100%;transform:translateX(-100%);transition:.25s}
+    aside.open{transform:none;box-shadow:var(--shadow)}.menu-btn{display:inline-flex!important}}
+  .menu-btn{display:none}
+</style>
+</head>
+<body>
+<header>
+  <button class="menu-btn" id="menuBtn">☰</button>
+  <div class="brand"><h1>Roll<span class="dot">.</span>Score</h1><span class="tag">BPM&nbsp;Music&nbsp;Scroller</span></div>
+  <div class="spacer"></div>
+  <label class="filebtn">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    Load PDF<input type="file" id="file" accept="application/pdf"></label>
+  <button id="fsBtn" title="Fullscreen score">⛶ Fullscreen</button>
+</header>
+<main>
+  <aside id="rail">
+    <div class="card"><h2>Tempo</h2>
+      <div class="field"><label>Beats per minute</label>
+        <div class="bpm-wrap"><input type="number" id="bpm" value="190" min="20" max="400">
+          <div class="stepper"><button data-bpm="1">▲</button><button data-bpm="-1">▼</button></div></div></div>
+      <div class="field"><label>Time signature (beats / measure)</label>
+        <div class="seg" id="timesig"><button data-beats="2">2</button><button data-beats="3">3</button>
+          <button data-beats="4" class="on">4</button><button data-beats="6">6</button></div></div>
+    </div>
+    <div class="card"><h2>Page Layout</h2>
+      <div class="field"><label>Measures (sections) per line</label><input type="number" id="mpl" value="4" min="1" max="12"></div>
+      <div class="field"><label>Lines per page <span style="color:var(--muted)">(used only if auto-detect is off)</span></label>
+        <input type="number" id="lpp" value="6" min="1" max="20"></div>
+    </div>
+    <div class="card"><h2>Detection &amp; Calibration</h2>
+      <div class="toggle"><span>Auto-detect staff lines</span><div class="sw on" id="detectSw"></div></div>
+      <div class="toggle"><span>Show line tracker</span><div class="sw on" id="trackSw"></div></div>
+      <div class="toggle"><span>Fit each page to screen</span><div class="sw on" id="fitSw"></div></div>
+      <div class="toggle"><span>Metronome click</span><div class="sw" id="metroSw"></div></div>
+      <div class="toggle"><span>1-bar count-in</span><div class="sw on" id="countSw"></div></div>
+      <div class="toggle"><span>Reading guide line</span><div class="sw" id="guideSw"></div></div>
+      <div class="field" style="margin-top:14px"><label>Speed fine-tune <span id="multTxt" style="color:var(--teal)">×1.00</span></label>
+        <input type="range" id="mult" min="0.5" max="1.8" step="0.01" value="1"></div>
+      <p class="hint">Auto-detect scans each page to find the music lines, so scrolling and the line indicator lock onto the real staves. Nudge fine-tune if the roll drifts.</p>
+    </div>
+    <div class="card"><h2>Computed Roll</h2>
+      <div class="readout">
+        <div class="big"><span id="secLine">5.1</span><small>sec / line</small></div>
+        <div class="sub">
+          <div><b id="detLines">—</b> lines detected · <b id="bpl">16</b> beats/line</div>
+          <div>Whole score rolls in <b id="totT">—</b></div>
+        </div>
+      </div>
+      <p class="hint" style="margin-top:12px"><kbd>Space</kbd> play/pause · <kbd>R</kbd> reset · <kbd>F</kbd> fullscreen · <kbd>↑↓</kbd> jump line · tap a line to start there</p>
+    </div>
+  </aside>
+  <section class="stage">
+    <div class="transport">
+      <button class="play" id="play" disabled><svg id="playIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+      <button id="reset" disabled>↺ Reset</button>
+      <div class="status" id="status"><span class="led"></span><span id="statusTxt">Stopped</span></div>
+      <div class="beats" id="beats"></div>
+      <div class="spacer"></div>
+      <div class="lineind"><span id="lineNo">—</span><span class="sep">/</span><span id="lineTot">—</span><em id="pageNo"></em></div>
+      <div class="tstat" id="tstat" style="margin-left:14px">No score loaded</div>
+    </div>
+    <div class="viewport" id="viewport">
+      <div class="progress" id="prog"></div>
+      <div class="guide" id="guide"></div>
+      <div id="pages"><div id="hl"></div></div>
+      <div class="empty" id="empty">
+        <div class="ic">𝄞</div><h3>Load a PDF to begin</h3>
+        <p>Drop in your tab or sheet music. The app finds each line of music, rolls at exactly your BPM, and shows which line you're on. Tap any line to start there.</p>
+      </div>
+    </div>
+  </section>
+</main>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc="lib/pdf.worker.min.js";
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmtTime=s=>{const m=Math.floor(s/60),x=Math.round(s%60);return m+":"+String(x).padStart(2,'0');};
+const READ=0.40; // reading anchor: current line sits 30% down the viewport
+
+const state={
+  bpm:190,beats:4,mpl:4,lpp:6,mult:1,
+  detect:true,fit:true,metro:false,countIn:true,guide:false,showTrack:true,
+  pdf:null,pages:0,aspects:[],pageBands:[],   // detected line fractions per page
+  systems:[],                                  // global lines in content coords {top,height,page}
+  playing:false,raf:null,startT:0,startLine:0,currentLine:0,
+};
+
+/* ---------- staff-line detection (gap-boundary method) ---------- */
+function medOf(a){const s=[...a].sort((p,q)=>p-q);return s.length?(s[Math.floor(s.length/2)]||1):1;}
+function detectSystems(canvas){
+  const W=560,ar=canvas.width/canvas.height,H=Math.max(60,Math.round(W/ar));
+  const off=document.createElement('canvas');off.width=W;off.height=H;
+  off.getContext('2d').drawImage(canvas,0,0,W,H);
+  const d=off.getContext('2d').getImageData(0,0,W,H).data,ink=new Float64Array(H);
+  for(let y=0;y<H;y++){let s=0;const r=y*W*4;
+    for(let x=0;x<W;x++){const i=r+x*4;const lum=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      if(d[i+3]>10&&lum<175)s++;}
+    ink[y]=s;}
+  // bound region to DARK full-width staff lines (excludes header text / margins)
+  let firstS=-1,lastS=-1;const sT=0.5*W;
+  for(let y=0;y<H;y++)if(ink[y]>sT){if(firstS<0)firstS=y;lastS=y;}
+  if(firstS<0)return [];
+  const pad=Math.round(0.022*H);
+  let c0=Math.max(0,firstS-pad),c1=Math.min(H-1,lastS+4);
+  const whiteT=0.012*W,white=y=>ink[y]<=whiteT,sepThr=Math.max(8,0.020*H);
+  const seps=[];let st=-1;
+  for(let y=c0;y<=c1+1;y++){const w=(y<=c1)&&white(y);
+    if(w&&st<0)st=y;
+    if(!w&&st>=0){if((y-st)>=sepThr)seps.push([st,y-1]);st=-1;}}
+  const bnds=[c0];seps.forEach(s=>bnds.push(Math.floor((s[0]+s[1])/2)));bnds.push(c1);
+  let sys=[];
+  for(let i=0;i<bnds.length-1;i++){let a=null,b=null;
+    for(let y=bnds[i];y<=bnds[i+1];y++)if(!white(y)){if(a===null)a=y;b=y;}
+    if(a!==null)sys.push([a,b]);}
+  if(!sys.length)return [];
+  let med=medOf(sys.map(s=>s[1]-s[0])),out=[];
+  for(const bb of sys){const stack=[bb.slice()];
+    while(stack.length){const x=stack.pop();
+      if((x[1]-x[0])<=1.5*med){out.push(x);continue;}
+      let best=-1,ws=null,yy=x[0];
+      while(yy<=x[1]){if(white(yy)){let s2=yy;while(yy<=x[1]&&white(yy))yy++;const e2=yy-1;
+          if((s2-x[0])>0.25*(x[1]-x[0])&&(x[1]-e2)>0.25*(x[1]-x[0])&&(e2-s2)>best){best=e2-s2;ws=[s2,e2];}}
+        else yy++;}
+      if(ws&&best>=0.5*sepThr){const mid=Math.floor((ws[0]+ws[1])/2);
+        let la=null,lb=null;for(let y=x[0];y<=mid;y++)if(!white(y)){if(la===null)la=y;lb=y;}
+        let ra=null,rb=null;for(let y=mid+1;y<=x[1];y++)if(!white(y)){if(ra===null)ra=y;rb=y;}
+        if(la!==null&&ra!==null){stack.push([ra,rb]);stack.push([la,lb]);continue;}}
+      out.push(x);}}
+  out.sort((p,q)=>p[0]-q[0]);
+  med=medOf(out.map(s=>s[1]-s[0]));
+  let changed=true;
+  while(changed&&out.length>1){changed=false;
+    for(let i=0;i<out.length;i++){const b=out[i];
+      if((b[1]-b[0])<0.4*med){let j;
+        if(i===0)j=1;else if(i===out.length-1)j=out.length-2;
+        else j=((b[0]-out[i-1][1])<=(out[i+1][0]-b[1]))?i-1:i+1;
+        out[j]=[Math.min(out[i][0],out[j][0]),Math.max(out[i][1],out[j][1])];
+        out.splice(i,1);changed=true;break;}}}
+  return out.map(s=>({top:Math.max(0,(s[0]-3)/H),bottom:Math.min(1,(s[1]+3)/H)}));
+}
+
+/* ---------- render ---------- */
+async function loadPDF(data){
+  $('hl').style.display='none';
+  [...$('pages').querySelectorAll('canvas')].forEach(c=>c.remove());
+  $('empty').style.display='none';$('tstat').textContent='Rendering…';
+  const pdf=await pdfjsLib.getDocument({data,verbosity:0}).promise;
+  state.pdf=pdf;state.pages=pdf.numPages;state.aspects=[];state.pageBands=[];
+  const dpr=Math.min(window.devicePixelRatio||1,2),renderW=1100;
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i),base=page.getViewport({scale:1});
+    const vp=page.getViewport({scale:renderW/base.width*dpr});
+    const cv=document.createElement('canvas');cv.width=vp.width;cv.height=vp.height;
+    await page.render({canvasContext:cv.getContext('2d'),viewport:vp}).promise;
+    $('pages').appendChild(cv);
+    state.aspects.push(base.width/base.height);
+    $('tstat').textContent='Analyzing page '+i+'/'+pdf.numPages+'…';
+    state.pageBands.push(detectSystems(cv));
+    await new Promise(r=>setTimeout(r,0));
+  }
+  $('play').disabled=false;$('reset').disabled=false;
+  const tot=state.pageBands.reduce((a,b)=>a+b.length,0);
+  $('tstat').innerHTML='<b>'+pdf.numPages+'</b> pages · <b>'+tot+'</b> lines found';
+  fitPages();
+}
+
+/* ---------- fit pages to screen, then map systems to content coords ---------- */
+function fitPages(){
+  if(!state.pages)return;
+  const cvs=$('pages').querySelectorAll('canvas');
+  const availW=$('viewport').clientWidth-24, availH=$('viewport').clientHeight-24;
+  cvs.forEach((cv,i)=>{
+    const ar=state.aspects[i]||0.773;
+    const w=state.fit?Math.min(availW,availH*ar):Math.min(availW,920);
+    cv.style.width=w+'px';cv.style.height=(w/ar)+'px';
+  });
+  requestAnimationFrame(()=>{buildSystems();positionGuide();recompute();refreshIndicatorFromScroll();});
+}
+
+function buildSystems(){
+  const cvs=$('pages').querySelectorAll('canvas');
+  const vpTop=$('viewport').getBoundingClientRect().top, sc=$('viewport').scrollTop;
+  state.systems=[];
+  cvs.forEach((cv,pi)=>{
+    const r=cv.getBoundingClientRect();
+    const top=(r.top-vpTop)+sc, h=r.height;
+    let bands=(state.detect && state.pageBands[pi] && state.pageBands[pi].length)?state.pageBands[pi]:null;
+    if(!bands){bands=[];for(let i=0;i<state.lpp;i++)bands.push({top:i/state.lpp,bottom:(i+1)/state.lpp});}
+    bands.forEach(b=>{const t=top+b.top*h,bot=top+b.bottom*h;
+      state.systems.push({top:t,height:bot-t,page:pi+1});});
+  });
+}
+
+/* ---------- timing math ---------- */
+function secPerLine(){return (state.mpl*state.beats)/state.bpm*60;}
+function recompute(){
+  state.bpm=clamp(+$('bpm').value||190,20,400);
+  state.mpl=clamp(+$('mpl').value||4,1,12);
+  state.lpp=clamp(+$('lpp').value||6,1,20);
+  const spl=secPerLine();
+  $('secLine').textContent=spl.toFixed(1);
+  $('bpl').textContent=state.mpl*state.beats;
+  $('detLines').textContent=state.systems.length||'—';
+  $('lineTot').textContent=state.systems.length||'—';
+  $('totT').textContent=state.systems.length?fmtTime(state.systems.length*spl):'—';
+}
+
+/* ---------- line<->position mapping (clamped target-scroll model) ---------- */
+function readOffset(){return $('viewport').clientHeight*READ;}
+function maxScroll(){return Math.max(0,$('viewport').scrollHeight-$('viewport').clientHeight);}
+function targetScroll(i){
+  const s=state.systems,n=s.length;if(!n)return 0;
+  const k=clamp(i,0,n-1);
+  return clamp(s[k].top-readOffset(),0,maxScroll());
+}
+function scrollForLine(lf){
+  const n=state.systems.length;if(!n)return 0;
+  if(lf<=0)return targetScroll(0);
+  const i=Math.floor(lf);
+  if(i>=n-1)return targetScroll(n-1);
+  return targetScroll(i)+(lf-i)*(targetScroll(i+1)-targetScroll(i));
+}
+function lineFromScroll(S){   // line whose scroll target best matches S (ties -> earliest line)
+  const n=state.systems.length;if(!n)return 0;
+  let best=0,bd=Infinity;
+  for(let i=0;i<n;i++){const d=Math.abs(targetScroll(i)-S);if(d<bd-0.5){bd=d;best=i;}}
+  return best;
+}
+
+/* ---------- indicator ---------- */
+function showIndicator(lf){
+  const s=state.systems,n=s.length,hl=$('hl');
+  if(!n){hl.style.display='none';$('lineNo').textContent='—';return;}
+  const idx=clamp(Math.floor(lf+1e-6),0,n-1),cur=s[idx];
+  state.currentLine=idx;
+  $('lineNo').textContent=idx+1;$('lineTot').textContent=n;$('pageNo').textContent='page '+cur.page;
+  if(!state.showTrack){hl.style.display='none';return;}
+  hl.style.display='block';
+  hl.style.top=(cur.top-8)+'px';hl.style.height=(cur.height+16)+'px';
+}
+function refreshIndicatorFromScroll(){
+  if(!state.systems.length)return;
+  showIndicator(lineFromScroll($('viewport').scrollTop));
+}
+
+/* ---------- scroll engine (line-driven) ---------- */
+function tick(now){
+  if(!state.playing)return;
+  const n=state.systems.length;
+  const lf=state.startLine+(now-state.startT)/1000/secPerLine();
+  if(lf>=n){ $('viewport').scrollTop=targetScroll(n-1);showIndicator(n-1);updateProgress();stop();return; }
+  $('viewport').scrollTop=scrollForLine(lf);
+  showIndicator(lf);updateProgress();
+  state.raf=requestAnimationFrame(tick);
+}
+function updateProgress(){
+  const v=$('viewport'),max=v.scrollHeight-v.clientHeight;
+  $('prog').style.width=(max>0?clamp(v.scrollTop/max,0,1)*100:0)+'%';
+}
+function start(){
+  if(!state.pdf||!state.systems.length)return;
+  buildSystems();recompute();
+  state.startLine=clamp(state.currentLine,0,state.systems.length-1);
+  state.playing=true;
+  $('playIcon').innerHTML='<rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/>';
+  $('status').classList.add('live');$('statusTxt').textContent='Playing';
+  if(state.guide)$('guide').classList.add('show');
+  const go=()=>{state.startT=performance.now();state.raf=requestAnimationFrame(tick);};
+  if(state.countIn&&state.metro)countInThenStart(go);else go();
+}
+function stop(){
+  state.playing=false;if(state.raf)cancelAnimationFrame(state.raf);
+  $('playIcon').innerHTML='<path d="M8 5v14l11-7z"/>';
+  $('status').classList.remove('live');$('statusTxt').textContent='Stopped';
+  $('guide').classList.remove('show');stopMetro();
+}
+function toggle(){state.playing?stop():start();}
+$('play').onclick=toggle;
+$('reset').onclick=()=>{stop();$('viewport').scrollTop=0;updateProgress();showIndicator(0);};
+
+/* manual scroll updates the indicator when paused */
+let scrollPend=false;
+$('viewport').addEventListener('scroll',()=>{
+  if(state.playing||scrollPend)return;scrollPend=true;
+  requestAnimationFrame(()=>{refreshIndicatorFromScroll();updateProgress();scrollPend=false;});
+});
+
+/* jump lines with arrows */
+function jumpLine(d){
+  if(!state.systems.length)return;
+  const cur=lineFromScroll($('viewport').scrollTop);
+  const t=clamp(cur+d,0,state.systems.length-1);
+  $('viewport').scrollTop=targetScroll(t);
+  showIndicator(t);
+}
+
+/* click / tap a line to choose where to start (or jump there live while playing) */
+function nearestSystem(clientY){
+  const r=$('viewport').getBoundingClientRect();
+  const y=(clientY-r.top)+$('viewport').scrollTop;
+  let idx=0,best=Infinity;
+  state.systems.forEach((s,i)=>{const c=s.top+s.height/2,d=Math.abs(c-y);if(d<best){best=d;idx=i;}});
+  return idx;
+}
+$('pages').addEventListener('click',e=>{
+  if(!state.systems.length)return;
+  const idx=nearestSystem(e.clientY);
+  showIndicator(idx);
+  flashLine();
+  if(state.playing){ state.startLine=idx; state.startT=performance.now(); }
+  else { $('viewport').scrollTo({top:targetScroll(idx),behavior:'smooth'}); }
+});
+function flashLine(){const hl=$('hl');hl.classList.remove('flash');void hl.offsetWidth;hl.classList.add('flash');}
+
+/* ---------- metronome ---------- */
+let actx=null,metroTimer=null,nextNote=0,beatNo=0,metroRunning=false;
+function ensureCtx(){if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();}
+function click(t,down){const o=actx.createOscillator(),g=actx.createGain();
+  o.frequency.value=down?1500:900;g.gain.setValueAtTime(.001,t);
+  g.gain.exponentialRampToValueAtTime(down?.6:.32,t+.001);g.gain.exponentialRampToValueAtTime(.0001,t+.05);
+  o.connect(g).connect(actx.destination);o.start(t);o.stop(t+.06);}
+function buildBeatDots(){const c=$('beats');c.innerHTML='';
+  for(let i=0;i<state.beats;i++){const d=document.createElement('div');d.className='beat'+(i===0?' down':'');c.appendChild(d);}}
+function litBeat(i){const ds=$('beats').children;for(const d of ds)d.classList.remove('lit');if(ds[i])ds[i].classList.add('lit');}
+function scheduler(){const spb=60/state.bpm;
+  while(nextNote<actx.currentTime+0.1){const bi=beatNo%state.beats;
+    if(state.metro)click(nextNote,bi===0);
+    setTimeout(()=>{if(state.playing||metroRunning)litBeat(bi);},(nextNote-actx.currentTime)*1000);
+    nextNote+=spb;beatNo++;}}
+function startMetro(){ensureCtx();actx.resume();metroRunning=true;beatNo=0;nextNote=actx.currentTime+0.05;metroTimer=setInterval(scheduler,25);}
+function stopMetro(){metroRunning=false;if(metroTimer)clearInterval(metroTimer);for(const d of $('beats').children)d.classList.remove('lit');}
+function countInThenStart(go){ensureCtx();actx.resume();const spb=60/state.bpm;let t=actx.currentTime+0.06;
+  for(let i=0;i<state.beats;i++){click(t,i===0);const bi=i;setTimeout(()=>litBeat(bi),(t-actx.currentTime)*1000);t+=spb;}
+  setTimeout(()=>{if(state.metro)startMetro();go();},state.beats*spb*1000);}
+
+/* ---------- controls ---------- */
+$('file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>loadPDF(new Uint8Array(r.result));r.readAsArrayBuffer(f);});
+const vp=$('viewport');
+['dragover','dragenter'].forEach(ev=>vp.addEventListener(ev,e=>e.preventDefault()));
+vp.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];
+  if(f&&f.type==='application/pdf'){const r=new FileReader();r.onload=()=>loadPDF(new Uint8Array(r.result));r.readAsArrayBuffer(f);}});
+$('bpm').addEventListener('input',recompute);
+$('mpl').addEventListener('input',recompute);
+$('lpp').addEventListener('input',()=>{recompute();if(!state.detect){buildSystems();refreshIndicatorFromScroll();}});
+document.querySelectorAll('[data-bpm]').forEach(b=>b.onclick=()=>{$('bpm').value=clamp(+$('bpm').value+(+b.dataset.bpm),20,400);recompute();});
+$('timesig').querySelectorAll('button').forEach(b=>b.onclick=()=>{
+  $('timesig').querySelectorAll('button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  state.beats=+b.dataset.beats;buildBeatDots();recompute();});
+$('mult').addEventListener('input',e=>{state.mult=+e.target.value;$('multTxt').textContent='×'+state.mult.toFixed(2);});
+function bindSw(id,key,cb){$(id).onclick=()=>{const on=$(id).classList.toggle('on');state[key]=on;cb&&cb(on);};}
+bindSw('detectSw','detect',()=>{buildSystems();recompute();refreshIndicatorFromScroll();});
+bindSw('trackSw','showTrack',on=>{if(!on)$('hl').style.display='none';else if(!state.playing)refreshIndicatorFromScroll();});
+bindSw('fitSw','fit',()=>fitPages());
+bindSw('metroSw','metro',on=>{if(on&&state.playing)startMetro();if(!on)stopMetro();});
+bindSw('countSw','countIn');
+bindSw('guideSw','guide',on=>{positionGuide();$('guide').classList.toggle('show',on&&state.playing);});
+function positionGuide(){$('guide').style.top=($('viewport').clientHeight*READ)+'px';}
+let rzT;
+function scheduleFit(d){clearTimeout(rzT);rzT=setTimeout(fitPages,d||150);}
+window.addEventListener('resize',()=>scheduleFit(150));
+window.addEventListener('orientationchange',()=>{scheduleFit(280);setTimeout(fitPages,650);});
+document.addEventListener('fullscreenchange',()=>setTimeout(fitPages,90));
+if(window.ResizeObserver){try{new ResizeObserver(()=>scheduleFit(120)).observe($('viewport'));}catch(e){}}
+if(window.visualViewport){window.visualViewport.addEventListener('resize',()=>scheduleFit(160));}
+$('fsBtn').onclick=()=>{const el=document.querySelector('.stage');
+  if(!document.fullscreenElement)el.requestFullscreen&&el.requestFullscreen();else document.exitFullscreen&&document.exitFullscreen();};
+$('menuBtn').onclick=()=>$('rail').classList.toggle('open');
+document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;
+  if(e.code==='Space'){e.preventDefault();toggle();}
+  else if(e.key==='r'||e.key==='R')$('reset').click();
+  else if(e.key==='f'||e.key==='F')$('fsBtn').click();
+  else if(e.key==='ArrowDown'){e.preventDefault();jumpLine(1);}
+  else if(e.key==='ArrowUp'){e.preventDefault();jumpLine(-1);}});
+buildBeatDots();recompute();
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('service-worker.js').catch(function(){});});}
+</script>
+</body>
+</html>
